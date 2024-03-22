@@ -11,7 +11,6 @@ import tf2onnx
 from tensorflow import keras
 from tensorflow.keras import layers
 
-# %%
 column_names = [
     "MPG",
     "Cylinders",
@@ -22,6 +21,7 @@ column_names = [
     "Model Year",
     "Origin",
 ]
+
 dataset = pd.read_csv(
     "auto-mpg.data",
     names=column_names,
@@ -31,29 +31,20 @@ dataset = pd.read_csv(
     skipinitialspace=True,
 )
 
-# %%
-dataset.isna().sum()
-
-# %%
 dataset = dataset.dropna()
 
-# %%
 origin = dataset.pop("Origin")
 dataset["USA"] = (origin == 1) * 1.0
 dataset["Europe"] = (origin == 2) * 1.0
 dataset["Japan"] = (origin == 3) * 1.0
 
-# %%
 train_dataset = dataset.sample(frac=0.8, random_state=0)
 test_dataset = dataset.drop(train_dataset.index)
 
-# %%
-# pop mpg and acceleration into labels
 train_labels = train_dataset[["MPG", "Acceleration"]].copy()
 train_dataset = train_dataset.drop(columns=["MPG", "Acceleration"])
 test_labels = test_dataset[["MPG", "Acceleration"]].copy()
 test_dataset = test_dataset.drop(columns=["MPG", "Acceleration"])
-
 
 # %%
 def build_model():
@@ -64,7 +55,7 @@ def build_model():
                 64, activation="relu", input_shape=[len(train_dataset.keys())]
             ),
             layers.Dense(64, activation="relu"),
-            layers.Dense(2),
+            layers.Dense(2, name="output"),
         ]
     )
 
@@ -82,7 +73,24 @@ class PrintDot(keras.callbacks.Callback):
             print("")
         print(".", end="")
 
+# %%
+model = build_model()
 
+# The patience parameter is the amount of epochs to check for improvement
+early_stop = keras.callbacks.EarlyStopping(monitor="val_loss", patience=10)
+
+EPOCHS = 1000
+
+history = model.fit(
+    train_dataset,
+    train_labels,
+    epochs=EPOCHS,
+    validation_split=0.2,
+    verbose=0,
+    callbacks=[early_stop, PrintDot()],
+)
+
+# %%
 def plot_history(history):
     hist = pd.DataFrame(history.history)
     hist["epoch"] = history.epoch
@@ -104,27 +112,8 @@ def plot_history(history):
     plt.legend()
     plt.show()
 
-
-# %%
-model = build_model()
-
-# The patience parameter is the amount of epochs to check for improvement
-early_stop = keras.callbacks.EarlyStopping(monitor="val_loss", patience=10)
-
-EPOCHS = 1000
-
-history = model.fit(
-    train_dataset,
-    train_labels,
-    epochs=EPOCHS,
-    validation_split=0.2,
-    verbose=0,
-    callbacks=[early_stop, PrintDot()],
-)
-
 plot_history(history)
 
-# %%
 loss, mae, mse = model.evaluate(test_dataset, test_labels, verbose=2)
 
 print("Testing set Mean Abs Error: {:5.2f}".format(mae))
@@ -164,5 +153,7 @@ model.save("model2withNorm.h5")
 
 # %%
 # export the model with onnx format
-onnx_model, _ = tf2onnx.convert.from_keras(model)
-onnx.save_model(onnx_model, "model2withNorm.onnx")
+spec = (tf.TensorSpec([None, 8], tf.float32, name="input"),)
+onnx_model, _ = tf2onnx.convert.from_keras(model, input_signature=spec, output_path="model2withNorm.onnx")
+
+# %%

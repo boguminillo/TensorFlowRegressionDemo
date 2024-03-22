@@ -42,7 +42,7 @@ sess = ort.InferenceSession("model2withNorm.onnx")
 input_name = sess.get_inputs()[0].name
 label_name = sess.get_outputs()[0].name
 input_data = dataset.to_numpy()
-input_data = input_data.astype(np.double)
+input_data = input_data.astype(np.float32)
 predictions = sess.run([label_name], {input_name: input_data})[0]
 
 # %%
